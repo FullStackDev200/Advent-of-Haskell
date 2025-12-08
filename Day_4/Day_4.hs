@@ -1,6 +1,9 @@
 module Printing_Department where
 
 import Data.List
+import Distribution.Simple.Test.Log (countTestResults)
+import GHC.Exts.Heap (ClosureType (CONSTR_0_1))
+import Text.XHtml (col)
 
 foo :: [String] =
   [ "..@@.@@@@."
@@ -54,19 +57,16 @@ safeSubmatrix3x3 (column, row) m =
 countAdjRolls :: [[Bool]] -> Int
 countAdjRolls = sum . map (length . filter id)
 
--- >>> (parseInput foo) !! 7 !! 0
+-- >>> canForkLiftAccess (parseInput foo) (5,0)
 -- True
-
--- >>> canForkLiftAccess (parseInput foo) (3,0)
--- False
 canForkLiftAccess :: [[Bool]] -> (Int, Int) -> Bool
-canForkLiftAccess m (column, row) =
-  column >= 0
-    && column < length m
-    && row >= 0
-    && row < length (m !! column)
-    && m !! column !! row
-    && countAdjRolls (submatrix3x3 (column, row) m) < 4
+canForkLiftAccess m (row, column) =
+  row >= 0
+    && row < length m
+    && column >= 0
+    && column < length (m !! row)
+    && m !! row !! column
+    && countAdjRolls (submatrix3x3 (row, column) m) < 4
 
 canForkLiftMatrix :: [[Bool]] -> [[Bool]]
 canForkLiftMatrix m =
@@ -74,10 +74,42 @@ canForkLiftMatrix m =
   | (i, row) <- zip [0 ..] m
   ]
 
+-- >>> shouldBePicked (parseInput foo) (0,3)
+-- False
+shouldBePicked :: [[Bool]] -> (Int, Int) -> Bool
+shouldBePicked m (row, column) =
+  row >= 0
+    && row < length m
+    && column >= 0
+    && column < length (m !! row)
+    && m !! row !! column
+    && countAdjRolls (submatrix3x3 (row, column) m) >= 4
+
+apply2D :: (a -> b) -> [[a]] -> [[b]]
+apply2D f = map (map f)
+
+pickedMatrix :: [[Bool]] -> [[Bool]]
+pickedMatrix old =
+  let new =
+        [ [ shouldBePicked old (row, col)
+          | col <- [0 .. length (old !! row) - 1]
+          ]
+        | row <- [0 .. length old - 1]
+        ]
+   in if new == old
+        then old
+        else pickedMatrix new
+
+-- >>> countTrue $ parseInput foo
+-- 71
+countTrue :: [[Bool]] -> Int
+countTrue = sum . map (sum . map fromEnum)
+
 main = do
   contents <- readFile "Day_4/input.txt"
   let ls = lines contents
   let parsed = parseInput ls
-  let flattened = concat $ canForkLiftMatrix parsed
-  let totalTrues = length $ filter id flattened
-  print totalTrues
+  -- let flattened = concat $ canForkLiftMatrix parsed
+  -- let totalTrues = length $ filter id flattened
+  print $ countTrue parsed
+  print $ countTrue $ pickedMatrix parsed
