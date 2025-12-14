@@ -1,11 +1,5 @@
 module Laboratories where
 
-import Control.Monad
-import Control.Monad.ST
-import Data.Array
-import Data.Array.ST
-import Data.Tree (flatten)
-
 foo =
   [ ".......S......."
   , "..............."
@@ -33,37 +27,10 @@ parseChar '^' = 2
 parseInput :: [String] -> [[Int]]
 parseInput = map (map parseChar)
 
-toArray :: [[Int]] -> Array (Int, Int) Int
-toArray m =
-  array
-    ((0, 0), (rows - 1, cols - 1))
-    [ ((i, j), m !! i !! j)
-    | i <- [0 .. rows - 1]
-    , j <- [0 .. cols - 1]
-    ]
- where
-  rows = length m
-  cols = length (m !! 1)
-
-fromArray :: Array (Int, Int) Int -> [[Int]]
-fromArray arr =
-  [ [ arr ! (i, j)
-    | j <- [c0 .. c1]
-    ]
-  | i <- [r0 .. r1]
-  ]
- where
-  ((r0, c0), (r1, c1)) = bounds arr
-
 -- 1 = beam, 2 = splitter, 0 = empty
 startBeams :: Int -> Int -> Int -> Int
 startBeams self before next
   | before == 2 || next == 2 = 1
-  | otherwise = self
-
-extendBeams :: Int -> Int -> Int
-extendBeams self up
-  | up == 1 = 1
   | otherwise = self
 
 getOr :: Int -> [[Int]] -> Int -> Int -> Int
@@ -83,44 +50,23 @@ buildTree m =
   | i <- [0 .. length m - 1]
   ]
 
-fixPointArr :: (Eq a) => (a -> a) -> a -> a
-fixPointArr f x =
-  let next = f x
-   in if next == x then x else fixPointArr f next
+-- >>> zipWith extendBeams [0,0,2,0,0,0,0] [0,0,1,2,1,0,0]
+-- [0,0,1,0,1,0,0]
+extendBeams :: Int -> Int -> Int
+extendBeams self up
+  | up == 1 = max self 1
+  | up == 2 = self
+  | otherwise = self
 
-extendTreeST :: Array (Int, Int) Int -> Array (Int, Int) Int
-extendTreeST old = runSTArray $ do
-  st <- thaw old
-  let ((r0, c0), (r1, c1)) = bounds old
-
-  forM_ [r0 .. r1] $ \i ->
-    forM_ [c0 .. c1] $ \j -> do
-      self <- readArray st (i, j)
-
-      if self == 2
-        then pure ()
-        else do
-          up <-
-            if i > r0
-              then readArray st (i - 1, j)
-              else pure 0
-
-          let new = extendBeams self up
-          writeArray st (i, j) new
-
-  pure st
-
-solve :: [[Int]] -> [[Int]]
-solve m =
-  let built = buildTree m
-      arr0 = toArray built
-      arrF = fixPointArr extendTreeST arr0
-   in fromArray arrF
-
-isValidSplit :: Int -> Int -> Int -> Int
-isValidSplit self up before
-  | self == 1 && up == 1 && before /= 2 = 1
-  | otherwise = 0
+-- >>> extendBeams 1 ([head bareTree]) bareTree
+extendTreeBeams :: [[Int]] -> [[Int]]
+extendTreeBeams m = go 1 [head m]
+ where
+  go row acc
+    | length acc == length m = acc
+    | otherwise =
+        let newRow = zipWith extendBeams (m !! row) (acc !! (row - 1))
+         in go (row + 1) (acc ++ [newRow])
 
 countSplits :: [[Int]] -> Int
 countSplits m =
@@ -145,4 +91,6 @@ main = do
   contents <- readFile "Day_7/input.txt"
   let ls = lines contents
   let input = parseInput ls
-  print $ countSplits (solve input)
+  let fullTree = extendTreeBeams $ buildTree input
+  putStrLn $ render fullTree
+  print $ countSplits fullTree
